@@ -9,7 +9,7 @@ fn main() {
 }
 
 fn run() -> Result<(), Error> {
-    let f = File::open("data/23andme.txt")?;
+    let f = File::open("../data/23andme.txt")?;
     let input = BufReader::new(f);
     let manifest = parser::parse(input)?;
     println!("{:?}", manifest);
