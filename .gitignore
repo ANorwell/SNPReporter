@@ -1,4 +1,5 @@
 **/*.rs.bk
 /data
 
-reporter/target
+/*/target
+/*/*.log
