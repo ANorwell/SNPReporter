@@ -6,11 +6,11 @@ use std::collections::HashMap;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
-    let params = [
-        ("list", "categorymembers"),
-        ("cmtitle", "Category:Is_a_snp")];
-    let req = MWRequest::create(&params);
-    let rsp: MWResponse<HashMap<String, serde_json::Value>> = send_request(&client, &req)?;
+    let params = vec![
+        ("list".to_string(), "categorymembers".to_string()),
+        ("cmtitle".to_string(), "Category:Is_a_snp".to_string())];
+    let req = MWRequest::new(params);
+    let rsp: MWResponse<HashMap<String, serde_json::Value>> = send_request(&client, req)?;
     println!("{:?}", rsp);
     Ok(())
 }
@@ -19,8 +19,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct MWContinue { cmcontinue: String, r#continue: String }
 
 impl MWContinue {
-    fn params(&self) -> [(&str, &str); 2] {
-        [("cmcontinue", self.cmcontinue.as_str()), ("continue", self.r#continue.as_str())]
+    fn to_params(cont: MWContinue) -> Params {
+        vec!(("cmcontinue".to_string(), cont.cmcontinue), ("continue".to_string(), cont.r#continue))
     }
 }
 
@@ -37,19 +37,22 @@ impl<T> MWResponse<T> {
     }
 }
 
-struct MWRequest<'a> {
+type Params = Vec<(String, String)>;
+
+struct MWRequest {
     cont: Option<MWContinue>,
-    params: &'a[(&'a str, &'a str)]
+    params: Params
 }
 
-impl MWRequest<'_> {
-    fn create<'a>(params: &'a[(&'a str, &'a str)]) -> MWRequest<'a> {
+
+impl MWRequest {
+    fn new(params: Params) -> MWRequest {
         MWRequest { cont: None, params }
     }
 }
 
 
-fn send_request<T>(client: &Client, request: &MWRequest) -> Result<MWResponse<T>, Error>
+fn send_request<T>(client: &Client, request: MWRequest) -> Result<MWResponse<T>, Error>
     where T: DeserializeOwned {
     let common_params = [
         ("action", "query"),
@@ -58,11 +61,11 @@ fn send_request<T>(client: &Client, request: &MWRequest) -> Result<MWResponse<T>
     let mut builder = client
         .get("http://bots.snpedia.com/api.php")
         .query(&common_params)
-        .query(request.params);
+        .query(&request.params);
 
-    builder = match &request.cont {
+    builder = match request.cont {
         None => builder,
-        Some(cont) => builder.query(&cont.params())
+        Some(cont) => builder.query(&MWContinue::to_params(cont))
     };
 
     builder
