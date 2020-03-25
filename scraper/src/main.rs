@@ -9,11 +9,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let params = vec![
         ("list".to_string(), "categorymembers".to_string()),
         ("cmtitle".to_string(), "Category:Is_a_snp".to_string())];
-    let request = MWRequest::new(params);
+    let request = MWRequest::query_json(params);
     let pager: MWSource<HashMap<String, serde_json::Value>> = MWSource::new(&client, request);
     pager.into_iter().take(3).for_each(|p| println!("{:?}", p));
-    //let rsp: MWResponse<HashMap<String, serde_json::Value>> = request.send_request(&client)?;
-    //println!("{:?}", pages);
+
+    let req2 = MWRequest::get_titles(vec!("I3000078".to_string(), "I3000037".to_string()));
+    let rsp: MWResponse<serde_json::Value> = req2.send_request(&client)?;
+    println!("{:?}", rsp);
+
     Ok(())
 }
 
@@ -45,14 +48,28 @@ impl MWRequest {
         MWRequest { cont: None, params }
     }
 
-    fn send_request<T: DeserializeOwned>(&self, client: &Client) -> Result<MWResponse<T>, Error> {
-        let common_params = [
-            ("action", "query"),
-            ("format", "json")];
+    fn query_json(mut params: Params) -> MWRequest {
+        params.push(("action".to_string(), "query".to_string()));
+        params.push(("format".to_string(), "json".to_string()));
+        MWRequest::new(params)
+    }
 
+    fn get_titles(titles: Vec<String>) -> MWRequest {
+        let params = vec![
+            ("action".to_string(), "query".to_string()),
+            ("format".to_string(), "json".to_string()),
+            ("prop".to_string(), "revisions".to_string()),
+            ("rvprop".to_string(), "content|timestamp".to_string()),
+            ("rvslots".to_string(), "main".to_string()),
+            ("titles".to_string(), titles.join("|"))
+        ];
+
+        MWRequest::new(params)
+    }
+
+    fn send_request<T: DeserializeOwned>(&self, client: &Client) -> Result<MWResponse<T>, Error> {
         let mut builder = client
             .get("http://bots.snpedia.com/api.php")
-            .query(&common_params)
             .query(&self.params);
 
         builder = match &self.cont {
@@ -60,7 +77,7 @@ impl MWRequest {
             Some(cont) => builder.query(&cont.to_params())
         };
 
-        builder.send()?.json()
+        builder.send()?.json()        
     }    
 }
 
