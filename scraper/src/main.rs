@@ -55,11 +55,8 @@ impl fmt::Display for SNPError {
 struct SNPData { name: String, content: String }
 impl SNPData {
     fn parse(name: String, json: serde_json::Value) -> Result<SNPData, SNPError> {
-        let content: Result<String, SNPError> = match json["revisions"][0]["slots"]["main"]["*"].as_str() {
-            None => Err(SNPError::ParseError()),
-            Some(str) => Ok(str.to_string())
-        };
-        content.map(|c| SNPData { name, content: c })
+        json["revisions"][0]["slots"]["main"]["*"].as_str().ok_or(SNPError::ParseError())
+            .map(|c| SNPData { name, content: c.to_string() })
     }
 }
 
