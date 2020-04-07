@@ -58,7 +58,7 @@ impl MWRequest {
             Some(cont) => builder.query(&cont.to_params())
         };
 
-        builder.send()?.json()        
+        builder.send()?.json()
     }    
 }
 pub struct MWSource<'a, T> {

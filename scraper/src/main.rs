@@ -1,9 +1,12 @@
 use reqwest::blocking::Client;
-use reqwest::Error;
 use serde::Deserialize;
 
 use std::collections::HashMap;
 use std::fmt;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::{Result as IOResult};
 
 mod mediawiki;
 
@@ -16,17 +19,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("cmtitle".to_string(), "Category:Is_a_snp".to_string())];
     let request = MWRequest::query_json(params);
     let pager: MWSource<SNPListPage> = MWSource::new(&client, request);
-    let results: Vec<Result<Vec<SNPData>, Error>> = pager.into_iter().take(3).map(|page| handle_page(&client, page)).collect();
+    let results: Vec<Result<(), SNPError>> =
+     pager
+        .into_iter()
+        .take(3)
+        .flat_map(|page| page.map_err(|e| SNPError::Net(e)).map(|p| handle_page(&client, p)))
+        .collect();
 
     println!("{:#?}", results);
     Ok(())
 }
 
-fn handle_page(client: &Client, page: Result<SNPListPage, Error>) -> Result<Vec<SNPData>,Error> {
-    let snps = page?.categorymembers.into_iter().map(|m| m.title).collect();
+fn handle_page(client: &Client, page: SNPListPage) -> Result<(),SNPError> {
+    let snps = page.categorymembers.into_iter().map(|m| m.title).collect();
     let req = MWRequest::get_titles(snps);
-    let rsp: MWResponse<SNPBatchPageSet> = req.send(&client)?;
-    Ok(rsp.query.pages.into_iter().flat_map(|(k, v)| SNPData::parse(k, v) ).collect())
+    let rsp: MWResponse<SNPBatchPageSet> = req.send(&client).map_err(|e| SNPError::Net(e))?;
+    
+    rsp.query
+        .to_snp_data()?
+        .into_iter()
+        .map(|data| store(data))
+        .collect()
+
+}
+
+fn store(data: SNPData) -> Result<(), SNPError> {
+    let write_result = write_snp(&data.name, data.content);
+    write_result.map_err(|e|  SNPError::WriteError { name: data.name, error: e } )
+}
+
+fn write_snp(name: &String, content: String) -> IOResult<()> {
+    let mut file = File::open(name)?;
+    file.write_all(content.as_bytes())?;
+    Ok(())
 }
 
 #[derive(Deserialize, Debug)]
@@ -36,10 +61,17 @@ struct SNPListPage { categorymembers: Vec<SNPListMember> }
 
 #[derive(Deserialize, Debug)]
 struct SNPBatchPageSet { pages: HashMap<String, serde_json::Value> }
+impl SNPBatchPageSet {
+    fn to_snp_data(self) -> Result<Vec<SNPData>, SNPError> {
+        self.pages.into_iter().map(|(k, v)| SNPData::parse(k, v)).collect()
+    }
+}
 
 #[derive(Debug)]
 enum SNPError {
-    ParseError()
+    ParseError(),
+    WriteError { name: String, error: std::io::Error },
+    Net(reqwest::Error)
 }
 
 impl std::error::Error for SNPError {}
