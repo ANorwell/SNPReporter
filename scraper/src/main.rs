@@ -12,7 +12,11 @@ mod mediawiki;
 
 use mediawiki::{ MWRequest, MWResponse, MWSource };
 
+const DATA_DIR: &str = "data";
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir(DATA_DIR)?;
+    
     let client = Client::new();
     let params = vec![
         ("list".to_string(), "categorymembers".to_string()),
@@ -44,12 +48,13 @@ fn handle_page(client: &Client, page: SNPListPage) -> Result<(),SNPError> {
 }
 
 fn store(data: SNPData) -> Result<(), SNPError> {
-    let write_result = write_snp(&data.name, data.content);
-    write_result.map_err(|e|  SNPError::WriteError { name: data.name, error: e } )
+    let name = data.name;
+    let write_result = write_snp(&name, data.content);
+    write_result.map_err(|e|  SNPError::WriteError { name, error: e } )
 }
 
 fn write_snp(name: &String, content: String) -> IOResult<()> {
-    let mut file = File::open(name)?;
+    let mut file = File::create(format!("{}/{}", DATA_DIR, name))?;
     file.write_all(content.as_bytes())?;
     Ok(())
 }
